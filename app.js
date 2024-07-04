@@ -1,5 +1,6 @@
 require('dotenv').config();
 require('colors');
+const twilio = require('twilio');
 
 const express = require('express');
 const ExpressWs = require('express-ws');
@@ -10,24 +11,25 @@ const { TranscriptionService } = require('./services/transcription-service');
 const { TextToSpeechService } = require('./services/tts-service');
 const { recordingService } = require('./services/recording-service');
 
-const VoiceResponse = require('twilio').twiml.VoiceResponse;
+const {VoiceResponse} = twilio.twiml;
 
 const app = express();
-ExpressWs(app);
+const expressWs = ExpressWs(app);
 
 const PORT = process.env.PORT || 3000;
 
 app.post('/incoming', (req, res) => {
-  try {
-    const response = new VoiceResponse();
-    const connect = response.connect();
-    connect.stream({ url: `wss://${process.env.SERVER}/connection` });
-  
-    res.type('text/xml');
-    res.end(response.toString());
-  } catch (err) {
-    console.log(err);
-  }
+  const response = new VoiceResponse();
+  const connect = response.connect();
+  connect.stream({ url: `wss://${process.env.SERVER}/connection` });
+
+  res.setHeader('Content-Type', 'text/xml');
+  res.send(response.toString());
+});
+
+app.post('/messaging', (req, res) => {
+  // Handle incoming messages if needed
+  res.send('<Response></Response>');
 });
 
 app.ws('/connection', (ws) => {
@@ -46,7 +48,7 @@ app.ws('/connection', (ws) => {
     let interactionCount = 0;
   
     // Incoming from MediaStream
-    ws.on('message', function message(data) {
+    ws.on('message', async function message(data) {
       const msg = JSON.parse(data);
       if (msg.event === 'start') {
         streamSid = msg.start.streamSid;
@@ -54,9 +56,9 @@ app.ws('/connection', (ws) => {
         
         streamService.setStreamSid(streamSid);
         gptService.setCallSid(callSid);
-
+    
         // Set RECORDING_ENABLED='true' in .env to record calls
-        recordingService(ttsService, callSid).then(() => {
+        await recordingService.then(() => {
           console.log(`Twilio -> Starting Media Stream for ${streamSid}`.underline.red);
           ttsService.generate({partialResponseIndex: null, partialResponse: 'Hello! I understand you\'re looking for a pair of AirPods, is that correct?'}, 0);
         });

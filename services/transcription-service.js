@@ -1,3 +1,4 @@
+
 require('colors');
 const { createClient, LiveTranscriptionEvents } = require('@deepgram/sdk');
 const { Buffer } = require('node:buffer');
