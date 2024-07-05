@@ -1,22 +1,24 @@
 require('dotenv').config();
 require('colors');
-const twilio = require('twilio');
-
 const express = require('express');
 const ExpressWs = require('express-ws');
-
+const twilio = require('twilio');
 const { GptService } = require('./services/gpt-service');
 const { StreamService } = require('./services/stream-service');
 const { TranscriptionService } = require('./services/transcription-service');
 const { TextToSpeechService } = require('./services/tts-service');
 const { recordingService } = require('./services/recording-service');
 
-const {VoiceResponse} = twilio.twiml;
+const { VoiceResponse } = twilio.twiml;
 
 const app = express();
-const expressWs = ExpressWs(app);
+ExpressWs(app);
 
 const PORT = process.env.PORT || 3000;
+
+app.get('/', (req, res) => {
+  res.send('Hello, World!');
+});
 
 app.post('/incoming', (req, res) => {
   const response = new VoiceResponse();
@@ -35,7 +37,6 @@ app.post('/messaging', (req, res) => {
 app.ws('/connection', (ws) => {
   try {
     ws.on('error', console.error);
-    // Filled in from start message
     let streamSid;
     let callSid;
 
@@ -47,7 +48,6 @@ app.ws('/connection', (ws) => {
     let marks = [];
     let interactionCount = 0;
   
-    // Incoming from MediaStream
     ws.on('message', async function message(data) {
       const msg = JSON.parse(data);
       if (msg.event === 'start') {
@@ -57,7 +57,6 @@ app.ws('/connection', (ws) => {
         streamService.setStreamSid(streamSid);
         gptService.setCallSid(callSid);
     
-        // Set RECORDING_ENABLED='true' in .env to record calls
         await recordingService.then(() => {
           console.log(`Twilio -> Starting Media Stream for ${streamSid}`.underline.red);
           ttsService.generate({partialResponseIndex: null, partialResponse: 'Hello! I understand you\'re looking for a pair of AirPods, is that correct?'}, 0);
@@ -74,7 +73,6 @@ app.ws('/connection', (ws) => {
     });
   
     transcriptionService.on('utterance', async (text) => {
-      // This is a bit of a hack to filter out empty utterances
       if(marks.length > 0 && text?.length > 5) {
         console.log('Twilio -> Interruption, Clearing stream'.red);
         ws.send(
@@ -100,7 +98,6 @@ app.ws('/connection', (ws) => {
   
     ttsService.on('speech', (responseIndex, audio, label, icount) => {
       console.log(`Interaction ${icount}: TTS -> TWILIO: ${label}`.blue);
-  
       streamService.buffer(responseIndex, audio);
     });
   
@@ -112,5 +109,6 @@ app.ws('/connection', (ws) => {
   }
 });
 
-app.listen(PORT);
-console.log(`Server running on port ${PORT}`);
+app.listen(PORT, () => {
+  console.log(`Server running on port ${PORT}`);
+});
